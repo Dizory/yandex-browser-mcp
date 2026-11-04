@@ -10,9 +10,14 @@ import { createHash } from 'node:crypto';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const windowsOnly = { skip: process.platform !== 'win32', timeout: 180000 };
 function powershell(args, options = {}) {
-  return execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', ...args], {
-    cwd: root, encoding: 'utf8', timeout: 120000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], ...options,
-  });
+  try {
+    return execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', ...args], {
+      cwd: root, encoding: 'utf8', timeout: 120000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], ...options,
+    });
+  } catch (error) {
+    error.message += `\nstdout: ${error.stdout ?? ''}\nstderr: ${error.stderr ?? ''}`;
+    throw error;
+  }
 }
 
 test('Windows installer preserves MCP entries, handles Unicode paths and reuses the bridge', windowsOnly, async (t) => {
