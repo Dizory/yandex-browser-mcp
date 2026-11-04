@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Yandex MCP — тестовая страница</title>
+<style>
+  body { font: 18px system-ui; margin: 40px; background: #f5f7fa; color: #18212f; }
+  main { max-width: 850px; margin: auto; padding: 32px; background: white; border-radius: 16px; }
+  input,button,textarea { font: inherit; padding: 10px; margin: 6px; }
+  td,th { padding: 14px; border: 1px solid #aaa; } table { border-collapse: collapse; }
+  #scrollbox { height: 100px; overflow: auto; border: 1px solid #aaa; margin-top: 20px; }
+  #scrollbox div { height: 700px; }
+</style>
+<main>
+  <h1>Проверка управления браузером</h1>
+  <p>Локальная тестовая страница. Здесь нет реальных сообщений и данных.</p>
+  <label>Сообщение <input id="message" placeholder="Введите сообщение"></label>
+  <button id="send">Отправить</button>
+  <p id="result" role="status">Сообщение пока не отправлено</p>
+  <label>Тестовое поле пароля <input id="password" type="password" value="fixture-secret-not-real"></label>
+  <h2>Таблица</h2>
+  <table><tr><th>Название</th><th>Значение</th></tr><tr><td>Тест</td><td id="cell" contenteditable="true" role="textbox">100</td></tr></table>
+  <div id="scrollbox"><div>Прокручиваемая область</div></div>
+  <button class="duplicate">Одинаковая кнопка</button><button class="duplicate">Одинаковая кнопка</button>
+  <button id="covered" style="position:relative">Кнопка под перекрытием<span style="position:absolute;inset:0;z-index:1;background:#ddd">Перекрытие</span></button>
+  <button id="double">Двойной клик</button>
+</main>
+<script>
+  window.testState = { clicks: 0, trusted: false, doubleClicks: 0 };
+  document.querySelector('#send').addEventListener('click', event => {
+    testState.clicks++;
+    testState.trusted = event.isTrusted;
+    document.querySelector('#result').textContent = document.querySelector('#message').value;
+  });
+  document.querySelector('#double').addEventListener('dblclick', () => testState.doubleClicks++);
+</script>
+</html>

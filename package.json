@@ -1,0 +1,20 @@
+{
+  "name": "yandex-browser-mcp",
+  "version": "0.1.0",
+  "description": "Control your existing Yandex Browser tabs from MCP agents",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server/index.js",
+    "mcp": "node server/stdio.js",
+    "test": "node --test test/*.test.js",
+    "test:browser": "node test/browser-smoke.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ws": "^8.22.1",
+    "zod": "^4.6.7"
+  },
+  "license": "MIT"
+}

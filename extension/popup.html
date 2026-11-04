@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Yandex Browser MCP</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="header">
+        <h1>MCP-мост</h1>
+        <span id="dot" class="dot disconnected" aria-hidden="true"></span>
+      </header>
+      <p id="state" class="state" role="status" aria-live="polite">Проверка…</p>
+      <p class="endpoint-label">Сервер</p>
+      <code id="endpoint" class="endpoint">ws://127.0.0.1:37891/extension</code>
+      <p id="error" class="error" hidden></p>
+      <button id="reconnect" type="button">Переподключиться</button>
+      <p class="hint">Управляет уже открытыми вкладками. Подтверждения не запрашиваются.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
