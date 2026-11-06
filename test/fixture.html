@@ -23,6 +23,15 @@
   <button class="duplicate">Одинаковая кнопка</button><button class="duplicate">Одинаковая кнопка</button>
   <button id="covered" style="position:relative">Кнопка под перекрытием<span style="position:absolute;inset:0;z-index:1;background:#ddd">Перекрытие</span></button>
   <button id="double">Двойной клик</button>
+  <form id="details" onsubmit="return false">
+    <label>Имя <input id="person" required></label>
+    <label>Статус <select id="stage"><option>Черновик</option><option>Готово</option></select></label>
+    <label><input id="flag" type="checkbox"> Проверено</label>
+    <input id="attach" type="file">
+  </form>
+  <iframe title="Вложенная форма" srcdoc="<label>Филиал <input id='branch'></label>"></iframe>
+  <button id="handle">Перетащить</button><button id="target">Назначение</button>
+  <a id="download" download="yandex-mcp-fixture.txt" href="/yandex-mcp-fixture.txt">Скачать</a>
 </main>
 <script>
   window.testState = { clicks: 0, trusted: false, doubleClicks: 0 };
@@ -32,5 +41,6 @@
     document.querySelector('#result').textContent = document.querySelector('#message').value;
   });
   document.querySelector('#double').addEventListener('dblclick', () => testState.doubleClicks++);
+  document.querySelector('#target').addEventListener('mouseup', () => document.body.dataset.dropped = 'yes');
 </script>
 </html>

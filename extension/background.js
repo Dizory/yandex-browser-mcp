@@ -8,6 +8,7 @@ import { Connection } from "./lib/connection.js";
 import { createDispatcher } from "./lib/dispatcher.js";
 import { createCommands } from "./lib/commands.js";
 import { DebuggerSession } from "./lib/debugger.js";
+import { reloadUpdatedExtension } from "./lib/self-update.js";
 
 const ENDPOINT = "ws://127.0.0.1:37891/extension";
 const ALARM_NAME = "bridge:keepalive";
@@ -23,6 +24,7 @@ const commands = createCommands({ chromeApi, session });
 const dispatch = createDispatcher({ handlers: commands, timeoutMs: COMMAND_TIMEOUT_MS });
 
 let statusNotifyTimer = null;
+let activeRequests = 0;
 function notifyPopup(status) {
   if (statusNotifyTimer !== null) return;
   statusNotifyTimer = setTimeout(() => {
@@ -44,10 +46,13 @@ const connection = new Connection({
     // Answers for a request that belonged to a closed socket are dropped: the
     // server keeps a fresh pending-id map after reconnecting.
     const epoch = connection.epoch;
-    const response = await dispatch(message);
-    if (!response) return;
-    if (connection.epoch !== epoch) return;
-    connection.send(response);
+    activeRequests++;
+    try {
+      const response = await dispatch(message);
+      if (response && connection.epoch === epoch) connection.send(response);
+    } finally {
+      activeRequests--;
+    }
   },
   onStatusChange: (status) => notifyPopup(status),
 });
@@ -77,6 +82,8 @@ chromeApi.alarms.onAlarm.addListener((alarm) => {
   if (!alarm || alarm.name !== ALARM_NAME) return;
   void ensureAlarm();
   if (!connection.isConnected()) connection.connect();
+  void reloadUpdatedExtension(chrome.runtime, () => activeRequests === 0 && session.queues.size === 0)
+    .catch(() => {}); // A temporarily unavailable directory is retried on the next alarm.
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

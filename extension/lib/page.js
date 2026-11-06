@@ -343,12 +343,8 @@ export function pageRuntime(ctx, action, payload) {
     }
   }
 
-  function snapshot(options) {
-    var requested =
-      options && options.maxChars !== undefined && options.maxChars !== null
-        ? Number(options.maxChars)
-        : 20000;
-    var maxChars = Math.max(1, Math.min(MAX_TEXT, isFinite(requested) ? Math.floor(requested) : 20000));
+  function collectElements(options, finding) {
+    var query = finding ? collapse(options.name).toLowerCase() : "";
     var elements = [];
     var truncated = false;
     var nodes = queryCandidates(options || {});
@@ -359,25 +355,37 @@ export function pageRuntime(ctx, action, payload) {
       if (attr(el, "aria-disabled") === "true") continue;
       if (tagOf(el) === "input" && String(attr(el, "type") || "").toLowerCase() === "hidden") continue;
       if (!isVisible(el)) continue;
-      if (elements.length >= MAX_ELEMENTS) {
+      var role = roleOf(el);
+      if (finding && options.role && role !== options.role) continue;
+      var name = accessibleName(el);
+      if (finding && !name.toLowerCase().includes(query)) continue;
+      var selector = selectorFor(el);
+      if (!selector) continue;
+      if (elements.length >= (finding ? 10 : MAX_ELEMENTS)) {
         truncated = true;
         break;
       }
-      var selector = selectorFor(el);
-      if (!selector) continue;
       var tag = tagOf(el);
       var summary = {
         selector: selector,
         tag: tag,
-        role: roleOf(el),
-        name: accessibleName(el),
+        role: role,
+        name: name,
         type: String(attr(el, "type") || (tag === "input" ? "text" : "")).toLowerCase(),
       };
-      var value = valueOf(el);
+      var value = finding ? null : valueOf(el);
       if (value !== null) summary.value = value;
       elements.push(summary);
     }
 
+    return { elements: elements, truncated: truncated };
+  }
+
+  function snapshot(options) {
+    var requested = options.maxChars == null ? 20000 : Number(options.maxChars);
+    var maxChars = Math.max(1, Math.min(MAX_TEXT, isFinite(requested) ? Math.floor(requested) : 20000));
+    var matches = collectElements(options, false);
+    var truncated = matches.truncated;
     var text = "";
     var root = doc ? doc.body || doc.documentElement : null;
     if (root) {
@@ -409,7 +417,7 @@ export function pageRuntime(ctx, action, payload) {
     } catch (error) {
       title = "";
     }
-    return { url: url, title: title, text: text, elements: elements, truncated: truncated };
+    return { url: url, title: title, text: text, elements: matches.elements, truncated: truncated, documentTime: win?.performance?.timeOrigin };
   }
 
   function uniqueMatch(selector) {
@@ -444,12 +452,12 @@ export function pageRuntime(ctx, action, payload) {
     }
   }
 
-  function locate(selector) {
+  function locate(selector, scroll) {
     if (!selector) return { ok: false, error: "Selector is required" };
     var match = uniqueMatch(selector);
     if (!match.ok) return { ok: false, error: match.error };
     var el = match.el;
-    scrollIntoView(el);
+    if (scroll !== false) scrollIntoView(el);
     if (!isVisible(el)) return { ok: false, error: "Element is not visible" };
     if (el.disabled === true || attr(el, "aria-disabled") === "true") {
       return { ok: false, error: "Element is disabled" };
@@ -550,8 +558,10 @@ export function pageRuntime(ctx, action, payload) {
   switch (action) {
     case "snapshot":
       return snapshot(payload || {});
+    case "find":
+      return collectElements(payload, true);
     case "locate":
-      return locate(String((payload && payload.selector) || ""));
+      return locate(String((payload && payload.selector) || ""), payload?.scroll);
     case "focus":
       return focusElement(String((payload && payload.selector) || ""));
     case "focused":
@@ -570,12 +580,12 @@ export function pageRuntime(ctx, action, payload) {
  * @param {object} [payload]
  * @returns {string}
  */
-export function buildPageExpression(action, payload) {
+export function buildPageExpression(action, payload, runtime = pageRuntime) {
   var safeAction = JSON.stringify(String(action));
   var safePayload = JSON.stringify(payload == null ? {} : payload);
   return (
     "(" +
-    pageRuntime.toString() +
+    runtime.toString() +
     ')({ document: document, window: window, getComputedStyle: window.getComputedStyle.bind(window) }, ' +
     safeAction +
     ", " +

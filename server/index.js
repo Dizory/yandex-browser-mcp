@@ -23,7 +23,7 @@ export async function startServer({ port = PORT, timeoutMs } = {}) {
     }
     if (req.url === '/health' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ name: 'yandex-browser-mcp', version: '0.1.0', connected: bridge.connected === true }));
+      res.end(JSON.stringify({ name: 'yandex-browser-mcp', version: '0.2.0', connected: bridge.connected === true }));
       return;
     }
     if (req.url !== '/mcp') { res.writeHead(404).end('Not found'); return; }

@@ -290,6 +290,17 @@ test("snapshot returns sanitized elements and page text", () => {
   }
 });
 
+test("find matches names and roles without sending page text or field values", () => {
+  const ctx = contextFor(buildFixture().doc);
+  const find = (name, role) => pageRuntime(ctx, "find", { name, role, candidates: SNAPSHOT_CANDIDATE_SELECTOR });
+  assert.deepEqual(find("ХРАН", "button").elements.map(el => el.selector), ["#save"]);
+  assert.deepEqual(find("ХРАН", "textbox"), { elements: [], truncated: false });
+  const email = find("mail").elements[0];
+  assert.equal(email.selector, "#email");
+  assert.equal("value" in email, false);
+  assert.equal("text" in find("mail"), false);
+});
+
 test("snapshot truncates text and reports the truncation flag", () => {
   const fixture = buildFixture();
   const result = pageRuntime(contextFor(fixture.doc), "snapshot", {
@@ -303,7 +314,7 @@ test("snapshot truncates text and reports the truncation flag", () => {
 test("snapshot caps the element list at 300 entries", () => {
   const buttons = [];
   for (let index = 0; index < 305; index += 1) {
-    buttons.push(makeElement("button", { id: "b" + index, candidate: true }));
+    buttons.push(makeElement("button", { id: "b" + index, text: "Button " + index, candidate: true }));
   }
   const body = makeElement("body", { children: buttons });
   body.innerText = "";
@@ -314,6 +325,11 @@ test("snapshot caps the element list at 300 entries", () => {
   });
   assert.equal(result.elements.length, 300);
   assert.equal(result.truncated, true);
+  const find = (name) => pageRuntime(contextFor(doc), "find", { name, candidates: SNAPSHOT_CANDIDATE_SELECTOR });
+  assert.equal(find("Button 304").elements[0].selector, "#b304");
+  const broad = find("Button");
+  assert.equal(broad.elements.length, 10);
+  assert.equal(broad.truncated, true);
 });
 
 test("buildPageExpression is self-contained for Runtime.evaluate", () => {
@@ -882,12 +898,14 @@ function makeStubSession(overrides = {}) {
 }
 
 test("commands validate unsafe or incomplete parameters", async () => {
-  const commands = createCommands({ chromeApi: { tabs: {} }, session: makeStubSession() });
+  const commands = createCommands({ chromeApi: makeFakeChrome(), session: makeStubSession() });
 
   await assert.rejects(commands.open({ url: "javascript:alert(1)" }), /Only http/);
   await assert.rejects(commands.navigate({ tabId: 1, url: "file:///C:/x" }), /Only http/);
   await assert.rejects(commands.snapshot({}), /tabId/);
   await assert.rejects(commands.snapshot({ tabId: 1, maxChars: "500" }), /maxChars/);
+  await assert.rejects(commands.find({ tabId: 1, name: "   " }), /name/);
+  await assert.rejects(commands.find({ tabId: 1, name: "Save", role: [] }), /role/);
   await assert.rejects(commands.click({ tabId: 1 }), /selector|viewport/);
   await assert.rejects(commands.click({ tabId: 1, x: 10 }), /both "x" and "y"/);
   await assert.rejects(commands.click({ tabId: 1, selector: "#a", button: "wheel" }), /button/);
@@ -955,6 +973,9 @@ test("snapshot normalizes elements and never forwards password values", async ()
   });
   assert.equal(result.elements[1].selector, "#pw");
   assert.equal("value" in result.elements[1], false);
+  const found = await commands.find({ tabId: 1, name: "A" });
+  assert.deepEqual(found.elements.map(el => el.selector), ["#a", "#pw"]);
+  assert.ok(found.elements.every(el => !("value" in el)));
 });
 
 test("click and type use trusted CDP input without echoing values", async () => {

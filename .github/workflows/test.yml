@@ -17,3 +17,40 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+  publish:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/package-extension.mjs "$env:GITHUB_RUN_NUMBER" "$env:GITHUB_SHA" extension.json
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: extension.json
+          create-storage-record: false
+      - name: Publish extension build
+        shell: pwsh
+        run: |
+          $tag = "ext-build-$env:GITHUB_RUN_NUMBER"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag extension.json --target "$env:GITHUB_SHA" --prerelease --latest=false --title "Extension build $env:GITHUB_RUN_NUMBER" --notes "Extension only. Verified build of $env:GITHUB_SHA."
+          }
+      - name: Publish Windows package on version change
+        shell: pwsh
+        run: |
+          $tag = 'v' + (Get-Content package.json -Raw | ConvertFrom-Json).version
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            ./scripts/package.ps1
+            gh release create $tag artifacts/yandex-browser-mcp-windows.zip artifacts/SHA256SUMS.txt --target "$env:GITHUB_SHA" --title "$tag — Yandex Browser MCP" --notes "Windows installation package and checksum."
+          }

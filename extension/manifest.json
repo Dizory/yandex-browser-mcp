@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Yandex Browser MCP Bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minimum_chrome_version": "120",
   "description": "Мост между локальным MCP-сервером и уже открытыми вкладками Яндекс Браузера.",
-  "permissions": ["debugger", "tabs", "alarms"],
+  "permissions": ["debugger", "tabs", "alarms", "downloads"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

@@ -26,7 +26,9 @@ async function browser(t, app, handle) {
 test('real MCP handshake, discover tools and disconnected error', async (t) => {
   const { client, base } = await setup(t);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 13);
+  assert.equal(tools.filter(tool => tool.name.startsWith('browser_')).length, 29);
+  assert.equal(tools.filter(tool => tool.name.startsWith('sheets_')).length, 7);
+  assert.equal(tools.find((tool) => tool.name === 'browser_find').annotations.readOnlyHint, true);
   assert.equal(tools.find((tool) => tool.name === 'browser_click').inputSchema.type, 'object');
   const result = await client.callTool({ name: 'browser_tabs', arguments: {} });
   assert.equal(result.isError, true);

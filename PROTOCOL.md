@@ -24,6 +24,9 @@ Commands:
   actionable elements: `{selector,tag,role,name,type,value?}`. CSS selectors
   should resolve to the same element and require no DOM mutation. Do not read
   password values. Text and elements are from the main document, not all frames.
+* `find {tabId,name,role?}` -> `{elements,truncated}`. Case-insensitive substring
+  of the accessible name, optional exact lowercase role, main document only.
+  Returns up to 10 actionable elements in document order without field values.
 * `click {tabId,selector?,x?,y?,button?,clickCount?}` -> `{clicked:true}`.
   Use selector OR viewport CSS coordinates x/y. Scroll selector into view,
   check visibility and uniqueness, use CDP Input.dispatchMouseEvent for trusted
@@ -40,6 +43,14 @@ Commands:
 * `evaluate {tabId,expression}` -> JSON-serializable result from JS expression,
   await promises, surface exceptions. Powerful advanced escape hatch.
 * `cdp {tabId,method,params?}` -> raw CDP result for advanced controls / frames.
+* `wait`, `read_region`, `read_table`, `read_form`, `fill_form`, `select`, `set_checked`, `inspect`
+  accept an optional CDP `frameId`, as do `snapshot` and `find`. Obtain IDs with `frames {tabId}`.
+* `hover`, `drag`, `history` operate on a tab. `upload_file` accepts explicit local paths
+  for a unique file input. `wait_download` identifies downloads by ID or a recent filename/URL filter.
+* `diff {tabId,snapshotId?}` compares bounded captures in memory. A first call creates the baseline.
+
+MCP tools named `sheets_*` run on the local server using Google OAuth and the Sheets v4 REST API.
+They do not use this WebSocket protocol. MCP discovery returns their complete schemas and input limits.
 
 Extension serializes commands per tab to avoid overlapping input actions.
 No confirmation UI or site-specific permission scenarios. Extension popup

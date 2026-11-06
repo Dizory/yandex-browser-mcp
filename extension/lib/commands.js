@@ -2,6 +2,9 @@
 // the user's existing tabs and returns protocol-shaped results.
 
 import { buildPageExpression, SNAPSHOT_CANDIDATE_SELECTOR } from "./page.js";
+import { createDomTools, domRuntime } from "./dom-tools.js";
+import { createInteractionTools } from "./interaction-tools.js";
+import { createDiffTool } from "./diff-tool.js";
 import { MODIFIER_BITS, buildKeyEvents } from "./keys.js";
 import {
   asObject,
@@ -113,11 +116,21 @@ export function createCommands({ chromeApi, session } = {}) {
     await getTab(tabId);
   }
 
-  async function pageEval(tabId, action, payload) {
+  const domTools = createDomTools({ pageEval, session });
+  async function pageEval(tabId, action, payload, frameId) {
+    const isDomTool = Object.hasOwn(domTools, action);
+    let contextId;
+    if (frameId !== undefined) {
+      if (typeof frameId !== "string" || !frameId) throw new Error("Invalid frameId");
+      const world = await session.send(tabId, "Page.createIsolatedWorld", { frameId, worldName: "yandex-browser-mcp" });
+      contextId = world.executionContextId;
+      if (!Number.isInteger(contextId)) throw new Error("Frame context unavailable; refresh browser_frames");
+    }
     const response = await session.send(tabId, "Runtime.evaluate", {
-      expression: buildPageExpression(action, payload),
+      expression: buildPageExpression(action, payload, isDomTool ? domRuntime : undefined),
+      ...(contextId === undefined ? {} : { contextId }),
       returnByValue: true,
-      awaitPromise: false,
+      awaitPromise: isDomTool,
       userGesture: false,
     });
     if (response && response.exceptionDetails) {
@@ -208,7 +221,7 @@ export function createCommands({ chromeApi, session } = {}) {
       const raw = await pageEval(tabId, "snapshot", {
         maxChars,
         candidates: SNAPSHOT_CANDIDATE_SELECTOR,
-      });
+      }, p.frameId);
       if (!raw || typeof raw !== "object") throw new Error("Snapshot returned no data");
       const elements = Array.isArray(raw.elements)
         ? raw.elements
@@ -222,7 +235,27 @@ export function createCommands({ chromeApi, session } = {}) {
         text: typeof raw.text === "string" ? raw.text.slice(0, maxChars) : "",
         elements,
         truncated: raw.truncated === true,
+        ...(Number.isFinite(raw.documentTime) ? { documentTime: raw.documentTime } : {}),
       };
+    });
+  }
+
+  async function find(params) {
+    const p = asObject(params);
+    const tabId = requireTabId(p.tabId);
+    if (typeof p.name !== "string" || !p.name.trim() || p.name.trim().length > MAX_ELEMENT_NAME)
+      throw new Error("name must contain 1 to 200 characters");
+    if (p.role !== undefined && (typeof p.role !== "string" || !/^[a-z]+$/.test(p.role)))
+      throw new Error("role must be a lowercase role name");
+    await requireTab(tabId);
+    return session.exclusive(tabId, async () => {
+      const raw = await pageEval(tabId, "find", {
+        name: p.name.trim(), role: p.role, candidates: SNAPSHOT_CANDIDATE_SELECTOR,
+      }, p.frameId);
+      if (!Array.isArray(raw?.elements)) throw new Error("Find returned no data");
+      const elements = raw.elements.slice(0, 10).map(summaryElement).filter(Boolean);
+      for (const el of elements) delete el.value;
+      return { elements, truncated: raw.truncated === true };
     });
   }
 
@@ -424,12 +457,16 @@ export function createCommands({ chromeApi, session } = {}) {
   }
 
   return {
+    ...domTools,
+    ...createInteractionTools({ chromeApi, session, pageEval }),
+    diff: createDiffTool({ chromeApi, session, snapshot }),
     tabs,
     open,
     activate,
     close,
     navigate,
     snapshot,
+    find,
     click,
     type,
     press,
