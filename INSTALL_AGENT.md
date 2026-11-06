@@ -13,7 +13,7 @@
 скачай `yandex-browser-mcp-windows.zip` и `SHA256SUMS.txt`. Сверь SHA256 через
 `Get-FileHash -Algorithm SHA256`. Распакуй в постоянную папку, например
 `$env:LOCALAPPDATA\YandexBrowserMCP`. Архив содержит файлы непосредственно в
-корне, без дополнительной папки. Git для установки из ZIP не нужен.
+корне, без дополнительной папки. Установщик сам скачивает проверяющую утилиту и сверяет её SHA-256. Git, GitHub CLI и аккаунт GitHub заранее устанавливать или настраивать не требуется.
 
 Не распаковывай поверх неизвестной существующей установки. При повторной
 установке сначала проверь её каталог, `/health` и запись MCP. Сохрани путь уже
@@ -31,13 +31,13 @@
 Из корня распакованного комплекта:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -EnableExtensionUpdates
 ```
 
 Если настраиваешь **именно Codex**, используй:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -RegisterCodex
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -EnableExtensionUpdates -RegisterCodex
 ```
 
 Скрипт выполнит `npm ci`, запустит сервер скрытым процессом на

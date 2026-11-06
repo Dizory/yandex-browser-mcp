@@ -1,4 +1,4 @@
-param([switch]$RegisterCodex)
+param([switch]$RegisterCodex, [switch]$EnableExtensionUpdates)
 
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'This installer is for Windows. See README.md for manual setup.' }
@@ -42,6 +42,9 @@ $stdioConfig = @{ mcpServers = @{ yandex_browser = @{ command = $node.Source; ar
 [IO.File]::WriteAllText((Join-Path $configDir 'mcp-stdio.json'), ($stdioConfig | ConvertTo-Json -Depth 8), $utf8)
 
 $bridge = & (Join-Path $projectRoot 'scripts/start-bridge.ps1')
+if ($EnableExtensionUpdates) {
+    & (Join-Path $projectRoot 'scripts/enable-extension-updates.ps1') -InstallRoot $projectRoot | Out-Host
+}
 if ($RegisterCodex -and -not $existing) {
     & $codex.Source mcp add yandex_browser --url 'http://127.0.0.1:37891/mcp'
     if ($LASTEXITCODE -ne 0) { throw 'Codex registration failed. The bridge is installed; inspect the CLI output.' }

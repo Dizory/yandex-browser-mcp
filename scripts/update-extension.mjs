@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 const repo = 'Dizory/yandex-browser-mcp';
 const asset = 'extension.json';
 const run = promisify(execFile);
-const tagPattern = /^ext-build-([1-9]\d*)$/;
+const releases = 'https://github.com/' + repo + '/releases/download/';
 const exists = async path => lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
 const installedBuild = manifest => Number(/^auto-([1-9]\d*)$/.exec(manifest.version_name)?.[1] || 0);
 
@@ -31,7 +31,8 @@ export async function applyBuild(root, bundle, expected) {
   const previous = join(root, '.extension-previous');
   // A stopped process between the two renames leaves the old tree intact.
   if (!await exists(live) && await exists(previous)) await rename(previous, live);
-  if (installedBuild(await manifest(live)) >= expected) return false;
+  const hasLive = !!await exists(live);
+  if (hasLive && installedBuild(await manifest(live)) >= expected) return false;
   const stage = await mkdtemp(join(root, '.extension-stage-'));
   try {
     for (const [name, data] of Object.entries(bundle.files)) {
@@ -46,22 +47,29 @@ export async function applyBuild(root, bundle, expected) {
       await manifest(previous); // Never remove an unrelated folder or a symlink.
       await rm(previous, { recursive: true });
     }
-    await rename(live, previous);
+    if (hasLive) await rename(live, previous);
     try { await rename(stage, live); }
-    catch (error) { await rename(previous, live); throw error; }
+    catch (error) { if (hasLive) await rename(previous, live); throw error; }
     return true;
   } finally { await rm(stage, { recursive: true, force: true }); }
 }
 
-async function gh(...args) {
-  const { stdout } = await run('gh', args, { windowsHide: true, timeout: 120000, maxBuffer: 1024 * 1024,
-    env: { ...process.env, GH_PROMPT_DISABLED: '1' } });
-  return stdout;
+async function download(url, limit) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
+  if (!response.ok) throw new Error('Download failed: HTTP ' + response.status + ' ' + url);
+  const chunks = [];
+  let length = 0;
+  for await (const bytes of response.body) {
+    length += bytes.length;
+    if (length > limit) throw new Error('Release file too large: ' + url);
+    chunks.push(bytes);
+  }
+  return Buffer.concat(chunks);
 }
 
 async function update() {
   if (!process.env.LOCALAPPDATA) throw new Error('Expected Windows LOCALAPPDATA');
-  const root = resolve(process.env.LOCALAPPDATA, 'YandexBrowserMCP');
+  const root = resolve(process.argv[2] || resolve(process.env.LOCALAPPDATA, 'YandexBrowserMCP'));
   // A named pipe lock is released by Windows even if the updater is killed.
   const lock = createServer(socket => socket.end());
   const lockKey = createHash('sha256').update(root.toLowerCase()).digest('hex').slice(0, 24);
@@ -76,20 +84,25 @@ async function update() {
     if (!await exists(live) && await exists(join(root, '.extension-previous'))) {
       await rename(join(root, '.extension-previous'), live);
     }
-    const current = installedBuild(await manifest(live));
-    const releases = JSON.parse(await gh('release', 'list', '-R', repo, '--limit', '100', '--json', 'tagName,isDraft'));
-    const serial = Math.max(0, ...releases.filter(r => !r.isDraft && tagPattern.test(r.tagName))
-      .map(r => Number(tagPattern.exec(r.tagName)[1])).filter(Number.isSafeInteger));
+    const current = await exists(live) ? installedBuild(await manifest(live)) : 0;
+    const { serial } = JSON.parse(await download(releases + 'ext-channel/channel.json', 4096));
+    if (!Number.isSafeInteger(serial) || serial < 1) throw new Error('Invalid update channel');
     if (serial <= current) { console.log('No newer extension build.'); return; }
     const temp = await mkdtemp(join(tmpdir(), 'ymcp-release-'));
     try {
-      await gh('release', 'download', 'ext-build-' + serial, '-R', repo, '-p', asset, '-D', temp);
       const path = join(temp, asset);
-      if ((await stat(path)).size > 8 * 1024 * 1024) throw new Error('Extension package is too large');
-      const bundle = JSON.parse(await readFile(path, 'utf8'));
+      const release = releases + 'ext-build-' + serial + '/';
+      const [bytes, signature] = await Promise.all([download(release + asset, 8 * 1024 * 1024),
+        download(release + 'attestation.json', 1024 * 1024)]);
+      const signed = join(temp, 'attestation.json');
+      await Promise.all([writeFile(path, bytes), writeFile(signed, signature)]);
+      const bundle = JSON.parse(bytes);
       if (!/^[0-9a-f]{40}$/.test(bundle.commit)) throw new Error('Invalid build commit');
-      await gh('attestation', 'verify', path, '-R', repo, '--signer-workflow', repo + '/.github/workflows/test.yml',
-        '--source-ref', 'refs/heads/main', '--source-digest', bundle.commit, '--deny-self-hosted-runners');
+      await run(process.env.YMCP_VERIFIER || 'gh', ['attestation', 'verify', path, '--bundle', signed, '-R', repo,
+        '--signer-workflow', repo + '/.github/workflows/test.yml', '--source-ref', 'refs/heads/main',
+        '--source-digest', bundle.commit, '--deny-self-hosted-runners'], { windowsHide: true, timeout: 120000,
+        env: { ...process.env, GH_CONFIG_DIR: temp, GH_TOKEN: '', GITHUB_TOKEN: '', GH_HOST: 'github.com', GH_PROMPT_DISABLED: '1' } });
+      await mkdir(root, { recursive: true });
       await applyBuild(root, bundle, serial);
       console.log('Installed extension build ' + serial);
     } finally { await rm(temp, { recursive: true, force: true }); }

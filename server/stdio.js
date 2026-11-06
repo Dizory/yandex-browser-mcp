@@ -4,8 +4,8 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-const client = new Client({ name: 'yandex-browser-mcp-proxy', version: '0.2.0' });
-const server = new Server({ name: 'yandex-browser-mcp', version: '0.2.0' }, { capabilities: { tools: {} } });
+const client = new Client({ name: 'yandex-browser-mcp-proxy', version: '0.2.1' });
+const server = new Server({ name: 'yandex-browser-mcp', version: '0.2.1' }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, () => client.listTools());
 server.setRequestHandler(CallToolRequestSchema, ({ params }) => client.callTool(params));
 let closing = false;

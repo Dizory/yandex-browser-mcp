@@ -45,6 +45,15 @@ test('malformed package cannot escape staging or replace an installed tree', asy
   assert.equal(await applyBuild(root, build, 15), true);
 });
 
+test('a verified build can bootstrap a new installation in a non-default Unicode folder', async t => {
+  const { root, build } = await fixture(t);
+  const customRoot = join(root, 'Программы пользователя', 'Мой MCP');
+  await mkdir(customRoot, { recursive: true });
+  assert.equal(await applyBuild(customRoot, build, 15), true);
+  assert.equal(JSON.parse(await readFile(join(customRoot, 'extension', 'manifest.json'))).version_name, 'auto-15');
+  assert.equal(await applyBuild(customRoot, build, 15), false);
+});
+
 test('only an idle worker reloads a published build different from the running build', async () => {
   let reloads = 0;
   let disk = 'auto-8';

@@ -19,6 +19,7 @@ jobs:
       - run: npm test
   publish:
     needs: test
+    concurrency: extension-release-channel
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     permissions:
@@ -33,18 +34,37 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/package-extension.mjs "$env:GITHUB_RUN_NUMBER" "$env:GITHUB_SHA" extension.json
-      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+      - id: sign
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: extension.json
           create-storage-record: false
       - name: Publish extension build
         shell: pwsh
+        env:
+          SIGNATURE: ${{ steps.sign.outputs.bundle-path }}
         run: |
           $tag = "ext-build-$env:GITHUB_RUN_NUMBER"
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag extension.json --target "$env:GITHUB_SHA" --prerelease --latest=false --title "Extension build $env:GITHUB_RUN_NUMBER" --notes "Extension only. Verified build of $env:GITHUB_SHA."
+            Copy-Item -LiteralPath $env:SIGNATURE -Destination attestation.json
+            gh release create $tag extension.json attestation.json --target "$env:GITHUB_SHA" --prerelease --latest=false --title "Extension build $env:GITHUB_RUN_NUMBER" --notes "Extension only. Verified build of $env:GITHUB_SHA."
           }
+      - name: Point public update channel at the newest signed build
+        shell: pwsh
+        run: |
+          $tag = 'ext-channel'
+          $serial = [int]$env:GITHUB_RUN_NUMBER
+          gh release view $tag 2>$null
+          $exists = $LASTEXITCODE -eq 0
+          if ($exists) {
+            gh release download $tag -p channel.json
+            if ($LASTEXITCODE -ne 0) { throw 'Could not read current extension channel' }
+            if ((Get-Content channel.json -Raw | ConvertFrom-Json).serial -ge $serial) { exit 0 }
+          }
+          Set-Content channel.json -Encoding utf8NoBOM -Value (@{ serial = $serial } | ConvertTo-Json -Compress)
+          if ($exists) { gh release upload $tag channel.json --clobber }
+          else { gh release create $tag channel.json --target "$env:GITHUB_SHA" --prerelease --latest=false --title "Extension updates" --notes "Public channel for the Windows extension updater." }
       - name: Publish Windows package on version change
         shell: pwsh
         run: |
