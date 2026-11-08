@@ -57,7 +57,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Initial extension update failed; fix the repor
 $action = New-ScheduledTaskAction -Execute (Get-Command powershell.exe).Source -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $runner + '"')
 $who = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $triggers = @((New-ScheduledTaskTrigger -AtLogOn -User $who),
-    (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 15)))
+    (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Hours 2)))
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
 $name = 'YandexBrowserMCP-ExtensionUpdates'
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $triggers -Settings $settings -User $who -RunLevel Limited -Force | Out-Null

@@ -1,6 +1,6 @@
 {
   "name": "yandex-browser-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Control your existing Yandex Browser tabs from MCP agents",
   "type": "module",
   "private": true,

